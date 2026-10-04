@@ -386,19 +386,92 @@
   }
 
   /* ---------- 9. 通用單位換算 ---------- */
+  // 「真空」類別(原程式沒有,為網頁版新增):各種真空/壓力表示法互換,全部經「絕對壓力 Pa」中轉。
+  // 單位格式 [名稱, 係數, 種類, 群組];種類:
+  //   'abs'   絕對壓力(完全真空 = 0):Pa = v × 係數
+  //   'gauge' 表壓(以大氣壓為 0,真空為負值):Pa = 大氣壓 + v × 係數
+  //   'vac'   真空度(正值,低於大氣壓的量):Pa = 大氣壓 − v × 係數
+  //   'pct'   真空度 %(0% = 大氣壓,100% = 完全真空):Pa = 大氣壓 × (1 − v/100)
+  var TORR = 101325 / 760;   // 1 Torr = 1 mmHg(視為相同,這樣 −760 mmHg 剛好是完全真空)
+  var INHG = 25.4 * TORR;    // 1 inHg = 25.4 mmHg
+  var PSI = 6894.757293168;
+  var G_VAC = '真空度(正值:低於大氣壓的量)';
+  var G_GAUGE = '表壓(負值 = 真空)';
+  var G_ABS = '絕對壓力(完全真空 = 0)';
+  var ATM_DEFAULT = '101.325';   // 標準大氣壓,kPa
+
   var CATEGORIES = [
     { name: '力 (Force)', units: [['N', 1], ['kgf', 9.80665], ['lbf', 4.4482216153]] },
     { name: '扭力 (Torque)', units: [['N·m', 1], ['kgf·cm', 0.0980665], ['kgf·m', 9.80665], ['lbf·ft', 1.3558179483]] },
     { name: '壓力 (Pressure)', units: [['Pa', 1], ['kPa', 1000], ['MPa', 1000000], ['bar', 100000], ['kgf/cm²', 98066.5], ['psi', 6894.757293168]] },
     { name: '長度 (Length)', units: [['mm', 1], ['cm', 10], ['m', 1000], ['inch', 25.4]] },
     { name: '速度 (Speed)', units: [['mm/s', 1], ['mm/min', 1 / 60], ['m/s', 1000], ['m/min', 16.666666666666668]] },
-    { name: '質量 (Mass)', units: [['kg', 1], ['g', 0.001], ['lb', 0.45359237], ['ton (公噸)', 1000]] }
+    { name: '質量 (Mass)', units: [['kg', 1], ['g', 0.001], ['lb', 0.45359237], ['ton (公噸)', 1000]] },
+    {
+      name: '真空 (Vacuum)',
+      vacuum: true,
+      units: [
+        ['kPa 真空度', 1000, 'vac', G_VAC],
+        ['mmHg 真空度', TORR, 'vac', G_VAC],
+        ['inHg 真空度', INHG, 'vac', G_VAC],
+        ['真空度 %', 1, 'pct', G_VAC],
+        ['kPa 表壓', 1000, 'gauge', G_GAUGE],
+        ['mmHg 表壓', TORR, 'gauge', G_GAUGE],
+        ['inHg 表壓', INHG, 'gauge', G_GAUGE],
+        ['bar 表壓', 100000, 'gauge', G_GAUGE],
+        ['psi 表壓', PSI, 'gauge', G_GAUGE],
+        ['Pa 絕對', 1, 'abs', G_ABS],
+        ['kPa 絕對', 1000, 'abs', G_ABS],
+        ['mbar 絕對', 100, 'abs', G_ABS],
+        ['bar 絕對', 100000, 'abs', G_ABS],
+        ['Torr 絕對', TORR, 'abs', G_ABS],
+        ['mTorr 絕對', TORR / 1000, 'abs', G_ABS],
+        ['atm', 101325, 'abs', G_ABS],
+        ['psi 絕對', PSI, 'abs', G_ABS]
+      ]
+    }
   ];
 
+  function toAbsPa(u, v, atm) {
+    switch (u[2]) {
+      case 'gauge': return atm + v * u[1];
+      case 'vac': return atm - v * u[1];
+      case 'pct': return atm * (1 - v / 100);
+      default: return v * u[1];
+    }
+  }
+
+  function fromAbsPa(u, a, atm) {
+    switch (u[2]) {
+      case 'gauge': return (a - atm) / u[1];
+      case 'vac': return (atm - a) / u[1];
+      case 'pct': return (1 - a / atm) * 100;
+      default: return a / u[1];
+    }
+  }
+
+  // p: {value, cat, from, to, atm(僅真空類別:大氣壓力基準,kPa)}
   function convert(p) {
     var v = readFloat(p.value, '數值');
-    var units = CATEGORIES[p.cat].units;
-    return { value: finite(v * units[p.from][1] / units[p.to][1]), unit: units[p.to][0] };
+    var cat = CATEGORIES[p.cat];
+    var from = cat.units[p.from];
+    var to = cat.units[p.to];
+    if (!cat.vacuum) {   // 原本的 6 個類別:運算與原程式完全相同
+      return { value: finite(v * from[1] / to[1]), unit: to[0] };
+    }
+    var relative = function (u) { return u[2] !== 'abs'; };
+    var atm = 101325;
+    if (relative(from) || relative(to)) {   // 只有「表壓/真空度」與絕對壓力互換時才需要大氣壓力
+      var kpa = readFloat(p.atm, '大氣壓力基準');
+      positive(kpa, '大氣壓力必須大於 0');
+      atm = kpa * 1000;
+    }
+    var a = toAbsPa(from, v, atm);
+    if (a < 0) {
+      if (a > -0.5) a = 0;   // 容許微小誤差,例如 −760 mmHg、−14.696 psi 都視為完全真空
+      else throw new CalcError('換算後的絕對壓力小於 0,請檢查數值(真空度不可超過大氣壓力)');
+    }
+    return { value: finite(fromAbsPa(to, a, atm)), unit: to[0] };
   }
 
   /* ---------- 結果顯示:單位切換與說明文字 ---------- */
@@ -458,6 +531,7 @@
     verticalLift: verticalLift,
     conveyor: conveyor,
     CATEGORIES: CATEGORIES,
+    ATM_DEFAULT: ATM_DEFAULT,
     convert: convert
   };
 

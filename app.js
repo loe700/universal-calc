@@ -232,7 +232,14 @@
     }
     wrap.appendChild(head);
 
-    if (spec.type === 'select') {
+    if (spec.type === 'seg') {                    // 兩三個短選項的分段選擇(取代容易被截斷的下拉選單)
+      var sg = makeSeg(spec.options, spec.def || 0, spec.label, function () { emit(spec.key); });
+      sg.el.classList.add('block');
+      wrap.appendChild(sg.el);
+      f.read = function (v) { v[spec.key] = sg.get(); };
+      f.write = function (o) { if (o[spec.key] != null) sg.set(o[spec.key]); };
+      f.reset = function () { sg.set(spec.def || 0); };
+    } else if (spec.type === 'select') {
       var sel = h('select', { id: id, 'aria-describedby': spec.hint ? hintId : null });
       spec.options.forEach(function (t, i) { sel.appendChild(h('option', { value: i }, t)); });
       sel.value = String(spec.def || 0);
@@ -255,6 +262,14 @@
       var box = h('div', { class: 'inp', onclick: function () { input.focus(); } }, input);
       if (spec.unit) box.appendChild(h('span', { class: 'unit', 'aria-hidden': 'true' }, spec.unit));
       var row = h('div', { class: 'num-row' }, box);
+      if (spec.sign) {   // iPhone 的數字鍵盤沒有負號:提供「±」鈕切換正負
+        row.appendChild(h('button', { type: 'button', class: 'sign-btn', 'aria-label': '切換正負號', onclick: function () {
+          var t = input.value.trim();
+          input.value = t.charAt(0) === '-' ? t.slice(1) : '-' + t;
+          input.focus();
+          emit(spec.key);
+        } }, '±'));
+      }
       var seg = null;
       if (spec.seg) {
         seg = makeSeg(spec.seg.options, spec.seg.def, spec.label + '的單位', function () { emit(spec.seg.key); });
@@ -783,9 +798,9 @@
       button: '計算出力',
       fields: [
         {
-          key: 'dir', type: 'select', label: '動作方向',
-          options: ['推出（伸缸行程，使用全缸徑面積）', '拉回（縮缸行程，扣除活塞桿截面積）'],
-          hint: '推出使用整個活塞面積；拉回因活塞桿占掉一部分面積，出力會較小'
+          key: 'dir', type: 'seg', label: '動作方向',
+          options: ['推出（伸缸）', '拉回（縮缸）'],
+          hint: '推出：伸缸行程，使用全缸徑面積\n拉回：縮缸行程，扣除活塞桿截面積；因活塞桿占掉一部分面積，出力會較小'
         },
         {
           key: 'bore', type: 'num', label: '缸徑 D', unit: 'mm',
@@ -996,13 +1011,23 @@
       build: function (emit) {
         var id1 = 'f' + (++uid), id2 = 'f' + (++uid);
         var lastCat = -1;
+        var node = null;
         var fromSel = h('select', { id: id1 });
         var toSel = h('select', { id: id2 });
+        // 真空類別的單位名稱較長:「從」「到」改成上下排列,各自占滿寬度才不會被截斷
+        function applyStack() { if (node) node.classList.toggle('stack', !!C.CATEGORIES[lastCat].vacuum); }
         function fill(cat) {
           lastCat = cat;
+          applyStack();
           [fromSel, toSel].forEach(function (s) {
             s.textContent = '';
-            C.CATEGORIES[cat].units.forEach(function (u, i) { s.appendChild(h('option', { value: i }, u[0])); });
+            var group = null, groupLabel = null;
+            C.CATEGORIES[cat].units.forEach(function (u, i) {
+              var opt = h('option', { value: i }, u[0]);
+              if (!u[3]) { s.appendChild(opt); return; }            // 有群組標籤的類別(真空)用 optgroup 分組
+              if (u[3] !== groupLabel) { groupLabel = u[3]; group = h('optgroup', { label: groupLabel }); s.appendChild(group); }
+              group.appendChild(opt);
+            });
           });
         }
         function defaults() {
@@ -1016,11 +1041,12 @@
         var swap = h('button', { type: 'button', class: 'swap-btn', 'aria-label': '交換單位', onclick: function () {
           var t = fromSel.value; fromSel.value = toSel.value; toSel.value = t; emit('swap');
         } }, icon('swap'));
-        var node = h('div', { class: 'pair' }, [
+        node = h('div', { class: 'pair' }, [
           h('div', { class: 'pc' }, [h('label', { for: id1 }, '從'), h('div', { class: 'sel' }, fromSel)]),
           swap,
           h('div', { class: 'pc' }, [h('label', { for: id2 }, '到'), h('div', { class: 'sel' }, toSel)])
         ]);
+        applyStack();
         return {
           node: node,
           read: function (v) { v.from = Number(fromSel.value); v.to = Number(toSel.value); },
@@ -1034,17 +1060,25 @@
         };
       }
     };
+    var isVacuum = function (v) { return !!C.CATEGORIES[v.cat].vacuum; };
+    var vacNote = h('p', { class: 'hint' }, '真空度：低於大氣壓的量，用正值（例如 80 kPa 真空度）\n表壓：以大氣壓為 0，真空是負值（例如 −80 kPa）；負號用數值欄旁的「±」\n絕對壓力：以完全真空為 0\n「−760 mmHg 表壓」「100% 真空度」「0 Torr 絕對」都是完全真空');
     var calc = makeCalculator({
       title: '通用單位換算機',
       button: '換算',
       fields: [
         { key: 'cat', type: 'select', label: '換算類別', options: C.CATEGORIES.map(function (c) { return c.name; }) },
-        { key: 'value', type: 'num', label: '數值' },
-        fromTo
+        { type: 'block', node: vacNote, showIf: isVacuum },
+        { key: 'value', type: 'num', label: '數值', sign: true },
+        fromTo,
+        {
+          key: 'atm', type: 'num', label: '大氣壓力基準', unit: 'kPa', def: C.ATM_DEFAULT,
+          hint: '表壓、真空度與絕對壓力互換時使用，預設為標準大氣壓 101.325 kPa，依當地氣壓可自行修改。絕對壓力之間互換（例如 Torr ↔ Pa）不受影響',
+          showIf: isVacuum
+        }
       ],
       view: bigResult({ label: '換算結果', units: null, text: function (r) { return fmt.g6(r.base); } }),
       compute: function (v) {
-        var r = C.convert({ value: v.value, cat: v.cat, from: v.from, to: v.to });
+        var r = C.convert({ value: v.value, cat: v.cat, from: v.from, to: v.to, atm: v.atm });
         return { base: r.value, unit: r.unit };
       }
     });
@@ -1060,7 +1094,7 @@
     { id: 'accel', name: '加速轉矩計算機', desc: '克服慣量所需的加速扭力', icon: 'trend', build: buildAccel },
     { id: 'lift', name: '垂直升降負載計算機', desc: '升降平台所需的馬達扭力', icon: 'lift', build: buildLift },
     { id: 'conveyor', name: '輸送帶馬達扭力計算機', desc: '輸送帶驅動滾筒所需扭力', icon: 'belt', build: buildConveyor },
-    { id: 'units', name: '通用單位換算機', desc: '力、扭力、壓力、長度、速度、質量', icon: 'swap', build: buildUnits }
+    { id: 'units', name: '通用單位換算機', desc: '力、扭力、壓力、長度、速度、質量、真空', icon: 'swap', build: buildUnits }
   ];
   var TAB_BY_ID = {};
   TABS.forEach(function (t) { TAB_BY_ID[t.id] = t; });

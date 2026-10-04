@@ -7,7 +7,7 @@
  *
  * 大幅修改網頁後,建議把下面的 VERSION 改成新字串(例如 v1.1.0)再上傳,
  * 手機會視為全新版本、整組重新安裝。 */
-var VERSION = 'v1.0.0';
+var VERSION = 'v1.1.0';
 var CACHE = 'wcalc-' + VERSION;
 var ASSETS = [
   './',
