@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>萬用計算機</title>
+<meta name="description" content="伺服馬達、氣缸與傳動機構的工程計算工具：推力、速度、慣量比、脈波換算、單位換算。可離線使用。">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b4a8f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a2a4d" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="萬用計算機">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-in">
+    <button id="switchBtn" class="bar-switch" type="button" aria-haspopup="dialog" aria-label="切換計算機">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>
+      <span class="bar-text"><span class="bar-app">萬用計算機</span><span class="bar-name" id="barName">馬達扭力計算機</span></span>
+      <svg class="ico chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button id="hintBtn" class="icon-btn" type="button" aria-pressed="true" aria-label="顯示欄位說明" title="顯示／隱藏欄位說明">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="1" fill="currentColor" stroke="none"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="mini" class="mini" hidden aria-hidden="true"><span class="mini-label" id="miniLabel"></span><span class="mini-val" id="miniVal"></span><span class="mini-unit" id="miniUnit"></span></div>
+
+<main id="main" class="main">
+  <h1 class="sr" id="pageTitle">萬用計算機</h1>
+  <noscript><p class="note">需要啟用 JavaScript 才能使用計算機。</p></noscript>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="calc.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
